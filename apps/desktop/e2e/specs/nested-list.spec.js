@@ -134,8 +134,14 @@ describe("Nested list rendering", function () {
     const nestedMarker = byText("nested item that also wraps");
     ok(marker && cont1 && cont2, "expected the wrapped bullet's three lines");
 
-    ok(/padding-inline-start: 3ch/.test(cont1.style), `continuation 1 style: ${cont1.style}`);
-    ok(/padding-inline-start: 3ch/.test(cont2.style), `continuation 2 style: ${cont2.style}`);
+    ok(
+      /padding-inline-start: calc\(var\(--cm-quote-indent, 0px\) \+ 3ch\)/.test(cont1.style),
+      `continuation 1 style: ${cont1.style}`,
+    );
+    ok(
+      /padding-inline-start: calc\(var\(--cm-quote-indent, 0px\) \+ 3ch\)/.test(cont2.style),
+      `continuation 2 style: ${cont2.style}`,
+    );
     // The source indent is collapsed, not rendered as text.
     ok(
       !cont1.text.startsWith("  "),
@@ -148,15 +154,21 @@ describe("Nested list rendering", function () {
     const nestedLines = lines.filter((l) => /a second source line/.test(l.text));
     ok(nestedLines.length >= 3, "expected three nested/ordered continuation lines");
     ok(
-      /padding-inline-start: 6ch/.test(nestedLines[0].style),
+      /padding-inline-start: calc\(var\(--cm-quote-indent, 0px\) \+ 6ch\)/.test(
+        nestedLines[0].style,
+      ),
       `nested continuation: ${nestedLines[0].style}`,
     );
     ok(
-      /padding-inline-start: 6ch/.test(nestedLines[1].style),
+      /padding-inline-start: calc\(var\(--cm-quote-indent, 0px\) \+ 6ch\)/.test(
+        nestedLines[1].style,
+      ),
       `task continuation: ${nestedLines[1].style}`,
     );
     ok(
-      /padding-inline-start: 3ch/.test(nestedLines[2].style),
+      /padding-inline-start: calc\(var\(--cm-quote-indent, 0px\) \+ 3ch\)/.test(
+        nestedLines[2].style,
+      ),
       `ordered continuation: ${nestedLines[2].style}`,
     );
     equal(

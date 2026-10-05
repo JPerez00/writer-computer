@@ -72,6 +72,12 @@ const defaultHidableSpecs: HidableNodeSpec[] = [
     },
   },
   {
+    // `<https://…>`: the URL stays visible as the link, only the angle
+    // brackets are markup.
+    nodeName: "Autolink",
+    subNodeNameToHide: "LinkMark",
+  },
+  {
     nodeName: "Strikethrough",
     nodeDecoration: strikethroughDecoration,
     subNodeNameToHide: "StrikethroughMark",

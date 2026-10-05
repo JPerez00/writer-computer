@@ -67,14 +67,12 @@
      that suppressed the rect's stray extents entirely. Cursor and text
      already lived inside that box, so they were unaffected.
 
-     Heading-hash hanging needs room on the left for the hash markers to
-     render in the page-padding gutter, so we relax the LEFT clip by the
-     side-padding distance (clamped to 0). The selection rect's between-
-     filler still needs clipping on the left, which we now do at the
-     selection-layer level — see `.cm-selectionLayer` below. The right
-     side stays at the strict text-col-inset.
-     See selection-rect-bleeds-past-text-spec.md and heading-hash-margin-
-     spec.md. */
+     The LEFT clip is relaxed by the side-padding distance (clamped to 0),
+     originally so hanging heading hashes could render in the gutter (since
+     removed; hashes now render inline). The selection rect's between-filler
+     is clipped on the left at the selection-layer level instead — see
+     `.cm-selectionLayer` below. The right side stays at the strict
+     text-col-inset. See selection-rect-bleeds-past-text-spec.md. */
   --writer-text-col-inset: max(
     var(--writer-editor-side-padding, 4rem),
     calc(
@@ -129,7 +127,7 @@
     "Segoe UI Symbol"
   );
   font-size: var(--writer-editor-font-size, 16px);
-  line-height: var(--writer-editor-line-height, 1.8);
+  line-height: var(--writer-editor-line-height, 1.875);
   letter-spacing: var(--writer-editor-letter-spacing, -0.03em);
   color: var(--text-secondary);
 }
@@ -154,14 +152,45 @@
   padding-right: 12px;
 }
 
-/* Reduce height of blank lines used as block separators */
-.cm-editor .cm-line:has(> br:only-child) {
-  line-height: 1;
+/* Spacing scale. Measured from the bottom of one line's glyphs to the top of
+   the next, in design px at 16px (everything scales with font size, zoom and
+   the Line Height setting, default 1.875):
+
+     12  one line to the next: wrapped lines, bullet → bullet
+      8  a heading to the line right under it
+     18  text → heading with no blank line
+     38  heading → blank line → text
+     42  a blank line between blocks
+     48  a blank line above a heading
+
+   Blank lines are ordinary lines, exactly as tall as a line of text, and get
+   no sizing of their own. Typing the first character on an empty line (or
+   deleting the last) therefore never changes its height, so nothing below
+   it moves; and the gap a blank line makes is always the same, removed
+   whole when the line is deleted. The extra air around a heading is the
+   heading's own: a little more above it, a little less below, so it reads
+   with the section it starts. (Shrunken blank lines used to make typing on
+   one push the rest of the note down, and a heading's padding used to look
+   like a blank line.) `--ws-glyph` is the font's ascent + descent in em; a
+   line's visible gap is its line-height minus it. */
+.cm-editor .cm-content {
+  --ws-px: calc(var(--writer-editor-font-size, 16px) / 16);
+  --ws-glyph: 1.125;
+  /* Bold display sizes run a little taller than body text. */
+  --ws-heading-glyph: 1.17;
+  --ws-line-gap: calc(
+    (var(--writer-editor-line-height, 1.875) - var(--ws-glyph)) *
+      var(--writer-editor-font-size, 16px)
+  );
+  --ws-heading-above: calc(12 * var(--ws-px));
+  --ws-heading-gap: calc(8 * var(--ws-px));
 }
 
-/* Indent blockquote text so it doesn't hug the vertical bar */
+/* Indent blockquote text so it doesn't hug the vertical bar. List lines in a
+   quote set their own inline padding and add `--cm-quote-indent` to it. */
 .cm-editor .cm-blockquote-line {
-  padding-inline-start: 1em;
+  --cm-quote-indent: 1em;
+  padding-inline-start: var(--cm-quote-indent);
 }
 
 /* The CodeMirror search extension renders its panel into `.cm-panels-bottom`
@@ -217,75 +246,28 @@
   background-repeat: no-repeat;
 }
 
-/* Hang ATX heading hash markers (`#`/`##`/…) in the left margin so the
-   heading text aligns flush with body content. The mark covers the hash
-   chars + the trailing space (matching prosemark's default hide range);
-   absolute positioning takes them out of the inline flow so the heading
-   text starts at the line's left edge regardless of caret state.
+/* Headings inherit the body line-height from `.cm-content`, which at 1.6em
+   (H1) gives a ~46px line box: a wrapped title reads as two loosely stacked
+   lines. Tighten to 1.3 (the unitless factor scales with each heading's own
+   font-size, `--ws-heading-scale`, set per level by the heading decoration).
 
-   Margin hashes show only while the caret is ON the heading line. Off the
-   line, prosemark's default hide spec adds `.cm-hidden-token` to the same
-   range; CodeMirror NESTS the marks (`.cm-heading-hash > .cm-hidden-token
-   > text`), so that inner span is the caret-off signal — we fade it with
-   `opacity: 0` (prosemark's own `.cm-transparent-token` technique).
-
-   The hash must be hidden with opacity, NEVER via `.cm-hidden-token`'s
-   `font-size: 0px` — hence the `font-size: inherit !important` overrides
-   on both the outer and the nested span (`inherit` on the outer span
-   alone leaves the inner one at 0px). A 0px hash isn't just invisible:
-   it measures as a collapsed zero-height rect at the baseline, and
-   CodeMirror's vertical caret motion (posAtCoords' line-padding check)
-   probes `coordsAt(lineFrom)` — the hash — to decide whether the probe
-   landed inside the heading line. With the collapsed rect, ArrowUp from
-   a blank line below a default-size heading (h4–h6) overshoots the
-   baseline by ~1px, the check rejects the heading line, and the caret
-   skips to the line above the heading.
-   See heading-hash-margin-spec.md. */
-.cm-editor .cm-markdown-heading {
-  padding-top: 1rem;
-}
-
-/* Space between consecutive list items (bullet, task, ordered), the same
-   at every depth. The list extension puts the class on an item's marker
-   line whenever a list item sits above it (the previous item, or the
-   parent for a nested list's first child), so only the first item of a
-   top-level list stays flush against the paragraph or heading above, and
-   a hard-wrapped item's continuation lines stay tight. */
-.cm-editor .cm-list-item-gap {
-  padding-top: var(--writer-list-item-gap, 0.4em);
-}
-
-/* Headings inherit the body's 1.8 line-height from `.cm-content`, which at
-   1.6em (H1) gives a ~46px line box: a wrapped title reads as two loosely
-   stacked lines and every heading carries an oversized band of leading.
-   Tighten to 1.3 (the unitless factor scales with each heading's own
-   font-size); `.cm-markdown-heading`'s `padding-top` keeps the section gap.
-
-   Dropping 1.8 to 1.3 also took a quarter of the heading's font-size of
-   half-leading off the bottom of the line box, which was the only space
-   between a heading and the paragraph or list right under it. Put it back
-   as `padding-bottom`. The heading font-size lives on the inner text span
-   (the highlight style), not on the line, so `em` here is the body size:
-   0.35em is the 5.6px an H2 used to have, close enough for every level. */
+   That leaves `--ws-heading-leading` above and below the heading's glyphs.
+   Padding tops it up to the spacing scale: `--ws-heading-above` over the
+   glyphs, and below them whatever, with the next line's own half line gap,
+   makes the heading gap. `em` here is the body size; the heading size lives
+   on the inner span. */
 .cm-editor .cm-heading-line {
+  --ws-heading-leading: calc(
+    (1.3 - var(--ws-heading-glyph)) * var(--ws-heading-scale, 1) *
+      var(--writer-editor-font-size, 16px) / 2
+  );
   position: relative;
   line-height: 1.3;
-  padding-bottom: 0.35em;
-}
-
-.cm-editor .cm-heading-hash {
-  position: absolute;
-  right: 100%;
-  padding-right: 0.4em;
-  color: var(--text-muted);
-  white-space: pre;
-  pointer-events: auto;
-  font-size: inherit !important;
-}
-
-.cm-editor .cm-heading-hash .cm-hidden-token {
-  font-size: inherit !important;
-  opacity: 0;
+  padding-top: max(0px, calc(var(--ws-heading-above) - var(--ws-heading-leading)));
+  padding-bottom: max(
+    0px,
+    calc(var(--ws-heading-gap) - var(--ws-line-gap) / 2 - var(--ws-heading-leading))
+  );
 }
 
 /* Wiki-link autocomplete tooltip uses the UI font, not the editor font */

@@ -4,9 +4,9 @@ import { resolve } from "node:path";
 
 // Ending a list with Enter in the real app: seeds a note with a list, puts
 // the caret at the end of a middle item, presses Enter twice (new empty item,
-// then exit) and types. The typed text must be its own paragraph, separated
-// from the list by a blank line, not a lazy continuation of the last item
-// (see SPECs/nested-list-editing-audit-spec.md, "Second pass").
+// then exit) and types. The empty item is cleared in place (no blank line is
+// inserted, nothing below moves), and the typed text is shown at the margin,
+// not padded as part of the item above.
 //
 // Requires a restorable workspace; self-skips otherwise. Set
 // LIST_ENTER_SHOT=/abs/dir to save screenshots and a JSON trace there.
@@ -174,7 +174,10 @@ describe("Ending a list with Enter", function () {
   function assertParagraph(after, rendered) {
     const i = after.lines.indexOf("What");
     ok(i > 0, `typed line not found in ${JSON.stringify(after.lines)}`);
-    ok(after.lines[i - 1] === "", `no blank line before the text: ${JSON.stringify(after.lines)}`);
+    ok(
+      after.lines[i - 1].startsWith("- "),
+      `a line was inserted between the list and the text: ${JSON.stringify(after.lines)}`,
+    );
     ok(
       !/padding-inline-start/.test((rendered && rendered.style) || ""),
       `text rendered as a list continuation: ${JSON.stringify(rendered)}`,

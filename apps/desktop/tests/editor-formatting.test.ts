@@ -207,6 +207,38 @@ describe("setHeading", () => {
 // setParagraph
 // ---------------------------------------------------------------------------
 
+describe("line commands keep the caret in the text", () => {
+  test("bullet: caret at the line end moves with the text", () => {
+    const s = run(toggleBulletList, "hello", 5);
+    expect(doc(s)).toBe("- hello");
+    expect(sel(s)).toEqual({ from: 7, to: 7 });
+  });
+
+  test("task: caret stays collapsed, so the next keystroke can't replace the line", () => {
+    const s = run(toggleTaskList, "# T\n\nBuy milk", 13);
+    expect(doc(s)).toBe("# T\n\n- [ ] Buy milk");
+    expect(sel(s)).toEqual({ from: 19, to: 19 });
+  });
+
+  test("removing a prefix pulls the caret back by the prefix length", () => {
+    const s = run(toggleBlockquote, "> hello", 4);
+    expect(doc(s)).toBe("hello");
+    expect(cursor(s)).toBe(2);
+  });
+
+  test("heading level change keeps the caret on the same character", () => {
+    const s = run(setHeading(3), "## hello", 5);
+    expect(doc(s)).toBe("### hello");
+    expect(cursor(s)).toBe(6);
+  });
+
+  test("a multi-line selection keeps its endpoints", () => {
+    const s = run(toggleNumberedList, "one\ntwo", 1, 6);
+    expect(doc(s)).toBe("1. one\n2. two");
+    expect(sel(s)).toEqual({ from: 4, to: 12 });
+  });
+});
+
 describe("setParagraph", () => {
   test("strips heading prefix", () => {
     const s = run(setParagraph, "## hello", 3);
@@ -247,6 +279,17 @@ describe("toggleBulletList", () => {
   test("adds the marker after existing indent on a nested plain line", () => {
     const s = run(toggleBulletList, "- a\n  text", 8);
     expect(doc(s)).toBe("- a\n  - text");
+  });
+
+  test("turns a task into a plain bullet, keeping its text", () => {
+    const s = run(toggleBulletList, "- [ ] Call the plumber", 22);
+    expect(doc(s)).toBe("- Call the plumber");
+    expect(cursor(s)).toBe(18);
+  });
+
+  test("turns a nested checked task into a nested bullet", () => {
+    const s = run(toggleBulletList, "- a\n  - [x] b", 13);
+    expect(doc(s)).toBe("- a\n  - b");
   });
 
   test("treats a parent and its nested child as all-bulleted", () => {

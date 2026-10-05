@@ -7,7 +7,6 @@ import { findOuterScroller, scrollPosToSafeTop } from "./editor-scroll";
 import { createEditorExtensions } from "./editor-extensions";
 import { findHeadingBySlug } from "./link-navigation";
 import { advanceViewportParse } from "./viewport-parse";
-import { clampSelectionToHeadings } from "./heading-decorations";
 import * as editorApi from "@/hooks/editor-api";
 import { useReloadVersion } from "@/hooks/use-tabs";
 import { getFileName } from "@/lib/paths";
@@ -20,12 +19,6 @@ function resolveScrollContainer(root: HTMLElement, getScrollContainer?: () => HT
 }
 
 function restoreCursorPosition(view: EditorView, cursorPos: number) {
-  // Always dispatch a selection — even a no-op anchor: 0 — so the
-  // `headingSelectionGuard` transactionFilter sees the initial selection and
-  // clamps it out of any no-go zone (e.g., a doc that starts with a heading
-  // would otherwise render the caret at lineFrom, which is the start of the
-  // hash chars). `EditorState.create`'s default selection is at position 0
-  // and isn't a transaction, so the filter never fires for it.
   let pos: number;
   if (cursorPos > 0) {
     pos = Math.min(cursorPos, view.state.doc.length);
@@ -126,7 +119,6 @@ export function useProsemarkEditor(
     advanceViewportParse(view, () => disposedRef.current);
 
     restoreCursorPosition(view, file?.cursorPos ?? 0);
-    clampSelectionToHeadings(view);
 
     const scrollContainer = resolveScrollContainer(el, getScrollContainerRef.current);
     if (scrollContainer) {
@@ -208,7 +200,6 @@ export function useProsemarkEditor(
     }
 
     advanceViewportParse(view, () => disposedRef.current);
-    clampSelectionToHeadings(view);
   }, [filePath, reloadVersion]);
 
   return mountRef;

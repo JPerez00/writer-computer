@@ -1,5 +1,7 @@
 # Markdown Heading Top Padding Spec
 
+> **Superseded (2026-10-04).** The padding was removed along with the shrunken blank lines: user feedback showed the gap above a heading read as half blank line, half margin, so deleting the blank line seemed to do nothing. Space between blocks now comes only from blank lines in the file, with headings padding their own line to the spacing scale in `prosemark-theme.css`. The `cm-markdown-heading` class is gone; `cm-heading-line` / `cm-heading-line-N` remain.
+
 ## Goal
 
 Give every rendered Markdown heading in the editor a small amount of top

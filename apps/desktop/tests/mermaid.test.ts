@@ -257,6 +257,22 @@ describe("mermaidDecorations always replaces the fence", () => {
   test("range selection covering whole fence → still replace", () => {
     expect(fenceDecorationKind(makeState({ anchor: fenceTo, head: fenceFrom }))).toBe("replace");
   });
+
+  test("an unclosed fence being typed stays source", () => {
+    const typing = "before\n```mermaid\ng";
+    const state = withFullParse(
+      EditorState.create({
+        doc: typing,
+        extensions: [markdown({ extensions: [GFM] }), mermaidDecorations()],
+        selection: EditorSelection.single(typing.length),
+      }),
+    );
+    let widgets = 0;
+    state.field(foldExtension).between(0, typing.length, (_from, _to, deco) => {
+      if ((deco as unknown as { spec?: { widget?: unknown } }).spec?.widget) widgets++;
+    });
+    expect(widgets).toBe(0);
+  });
 });
 
 describe("shouldStartDragGate", () => {

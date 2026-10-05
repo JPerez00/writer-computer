@@ -82,13 +82,24 @@ export const imageExtension = [
     keepDecorationOnUnfold: true,
     buildDecorations: (state, node, selectionTouchesRange) => {
       let imageUrl: string | undefined;
+      let urlRange: { from: number; to: number } | undefined;
       iterChildren(node.node.cursor(), (node) => {
         if (node.name === "URL") {
           imageUrl = normalizeMarkdownDestination(state.doc.sliceString(node.from, node.to));
+          urlRange = { from: node.from, to: node.to };
         }
 
         return undefined;
       });
+
+      // While the caret is in the destination the URL is still being typed
+      // (closeBrackets supplies the `)`, so `![a](h)` already parses as an
+      // image): previewing it would load `h`, `ht`, `htt`… one request (and
+      // DNS lookup) per keystroke. The preview appears once the caret leaves.
+      const url = urlRange;
+      if (url && state.selection.ranges.some((r) => r.from <= url.to && r.to >= url.from)) {
+        return undefined;
+      }
 
       if (imageUrl) {
         const line = state.doc.lineAt(node.from);

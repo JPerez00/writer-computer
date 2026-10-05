@@ -12,6 +12,7 @@
   "dependencies": {
     "@codemirror/autocomplete": "catalog:",
     "@codemirror/commands": "catalog:",
+    "@codemirror/lang-html": "catalog:",
     "@codemirror/lang-markdown": "catalog:",
     "@codemirror/language": "catalog:",
     "@codemirror/language-data": "catalog:",

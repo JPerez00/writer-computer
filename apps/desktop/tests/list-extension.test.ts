@@ -20,6 +20,7 @@ const {
   parseBulletTaskLine,
   listItemLineAt,
   listEnter,
+  leaveIndentedBlank,
   listBackspace,
   listIndent,
   listOutdent,
@@ -323,16 +324,47 @@ describe("listEnter", () => {
     expect(state.selection.main.head).toBe(0);
   });
 
+  test("an empty ordered item after one item ends the list in place", () => {
+    const { state, ran } = run(listEnter, makeMarked("# S\n\n1. Only step\n2. |"));
+    expect(ran).toBe(true);
+    expect(markedDoc(state)).toBe("# S\n\n1. Only step\n|");
+  });
+
+  test("an empty ordered item after several ends the list in place", () => {
+    expect(markedDoc(run(listEnter, makeMarked("1. One\n2. Two\n3. |")).state)).toBe(
+      "1. One\n2. Two\n|",
+    );
+  });
+
+  test("an empty nested ordered item steps out and takes the parent's next number", () => {
+    expect(markedDoc(run(listEnter, makeMarked("1. a\n2. b\n   1. x\n   2. |")).state)).toBe(
+      "1. a\n2. b\n   1. x\n3. |",
+    );
+  });
+
+  test("leaving a list right above a heading moves nothing below", () => {
+    expect(markedDoc(run(listEnter, makeMarked("- a\n- b\n- |\n## Next")).state)).toBe(
+      "- a\n- b\n|\n## Next",
+    );
+    expect(markedDoc(run(listEnter, makeMarked("- a\n- |\n\n## Next")).state)).toBe(
+      "- a\n|\n\n## Next",
+    );
+  });
+
+  test("a non-empty ordered item is left to lang-markdown's continuation", () => {
+    expect(run(listEnter, makeMarked("1. One|")).ran).toBe(false);
+  });
+
   test("wipes the line when empty task (`- [ ] `)", () => {
     const s = makeState("- [ ] ", 6);
     const { state } = run(listEnter, s);
     expect(state.doc.toString()).toBe("");
   });
 
-  test("ending a list leaves a blank line so the next paragraph is not a continuation", () => {
+  test("ending a list clears the empty item in place, inserting nothing", () => {
     const { state } = run(listEnter, makeMarked("- a\n- |"));
-    expect(markedDoc(state)).toBe("- a\n\n|");
-    // Text typed there is a paragraph of its own, not padded under `a`.
+    expect(markedDoc(state)).toBe("- a\n|");
+    // Text typed there is not a list line and is not padded under `a`.
     const typed = withFullParse(
       state.update({ changes: { from: state.doc.length, insert: "What" } }).state,
     );
@@ -342,7 +374,7 @@ describe("listEnter", () => {
 
   test("ending a list in the middle keeps the items after it", () => {
     const { state } = run(listEnter, makeMarked("- a\n- [ ] |\n- b"));
-    expect(markedDoc(state)).toBe("- a\n\n|\n- b");
+    expect(markedDoc(state)).toBe("- a\n|\n- b");
   });
 
   test("does not add a second blank line when ending a loose list", () => {
@@ -406,6 +438,28 @@ describe("listEnter", () => {
 // listBackspace
 // ---------------------------------------------------------------------------
 
+describe("leaveIndentedBlank (Enter on an indent-only line)", () => {
+  test("after a blank line, clears the indent of a list continuation", () => {
+    const { state, ran } = run(leaveIndentedBlank, makeMarked("- a\n\n  para\n\n  |"));
+    expect(ran).toBe(true);
+    expect(markedDoc(state)).toBe("- a\n\n  para\n\n|");
+  });
+
+  test("leaves an indented code block the same way", () => {
+    expect(markedDoc(run(leaveIndentedBlank, makeMarked("x\n\n    code\n\n    |")).state)).toBe(
+      "x\n\n    code\n\n|",
+    );
+  });
+
+  test("declines right under a text line (the first Enter keeps the indent)", () => {
+    expect(run(leaveIndentedBlank, makeMarked("- a\n  para\n  |")).ran).toBe(false);
+  });
+
+  test("declines inside fenced code", () => {
+    expect(run(leaveIndentedBlank, makeMarked("```\nfn\n\n    |\n```")).ran).toBe(false);
+  });
+});
+
 describe("listBackspace", () => {
   test("at nested bullet body start removes marker and one indent level", () => {
     const s = makeState("  - foo", 4);
@@ -420,11 +474,10 @@ describe("listBackspace", () => {
     expect(run(listBackspace, s).state.doc.toString()).toBe("foo");
   });
 
-  test("removing a top-level marker under another item leaves a blank line", () => {
-    // Without it the text is a lazy continuation of `a` (`- a⏎foo`).
-    expect(markedDoc(run(listBackspace, makeMarked("- a\n- |foo")).state)).toBe("- a\n\n|foo");
-    expect(markedDoc(run(listBackspace, makeMarked("- a\n- |")).state)).toBe("- a\n\n|");
-    expect(markedDoc(run(listBackspace, makeMarked("- a\n- [ ] |")).state)).toBe("- a\n\n|");
+  test("removing a top-level marker under another item does it in place", () => {
+    expect(markedDoc(run(listBackspace, makeMarked("- a\n- |foo")).state)).toBe("- a\n|foo");
+    expect(markedDoc(run(listBackspace, makeMarked("- a\n- |")).state)).toBe("- a\n|");
+    expect(markedDoc(run(listBackspace, makeMarked("- a\n- [ ] |")).state)).toBe("- a\n|");
   });
 
   test("does not add a second blank line when one is already there", () => {
@@ -570,7 +623,19 @@ describe("listIndent (Tab)", () => {
 
   test("nests an ordered item under the item before it", () => {
     expect(markedDoc(run(listIndent, makeMarked("- a\n1. b|")).state)).toBe("- a\n  1. b|");
-    expect(markedDoc(run(listIndent, makeMarked("1. a\n2. b|")).state)).toBe("1. a\n   2. b|");
+    expect(markedDoc(run(listIndent, makeMarked("1. a\n2. b|")).state)).toBe("1. a\n   1. b|");
+  });
+
+  test("an ordered item nested under a new parent restarts at 1", () => {
+    expect(markedDoc(run(listIndent, makeMarked("1. a\n2. b\n3. |")).state)).toBe(
+      "1. a\n2. b\n   1. |",
+    );
+  });
+
+  test("an ordered item nested under a parent with children continues them", () => {
+    expect(markedDoc(run(listIndent, makeMarked("1. a\n   1. x\n2. |")).state)).toBe(
+      "1. a\n   1. x\n   2. |",
+    );
   });
 
   test("nests under a tab-indented sibling with a tab, not spaces before the tab", () => {
@@ -668,9 +733,9 @@ describe("listIndent (Tab)", () => {
     expect(state.doc.toString()).toBe("- a\n  - [ ] b\n    b two\n\n    second\n    para");
   });
 
-  test("indents a lazy unindented wrapped line along with its item", () => {
+  test("leaves a line at the margin under the item where it is", () => {
     const { state } = run(listIndent, makeMarked("- a\n- b one|\nb two"));
-    expect(state.doc.toString()).toBe("- a\n  - b one\n  b two");
+    expect(state.doc.toString()).toBe("- a\n  - b one\nb two");
   });
 
   test("moves wrapped lines of a selected parent and its children", () => {
@@ -680,6 +745,12 @@ describe("listIndent (Tab)", () => {
 });
 
 describe("listOutdent (Shift-Tab)", () => {
+  test("an ordered item lifted out of a sub-list continues the parent's numbering", () => {
+    expect(markedDoc(run(listOutdent, makeMarked("1. a\n2. b\n   1. x\n   2. |")).state)).toBe(
+      "1. a\n2. b\n   1. x\n3. |",
+    );
+  });
+
   test("outdents to the prior shallower indent", () => {
     // `- a\n  - b` — b at depth 1. Shift-Tab targets the prior list item
     // with strictly shallower indent (a, at indent 0), so b goes to 0.
@@ -903,12 +974,10 @@ describe("listDecorationsField", () => {
   }
 
   test("pads a hard-wrapped item's continuation lines to the body column", () => {
+    // `five` sits at the margin in the source, so it stays there.
     const s = makeState("- one two\n  three four\nfive");
     expect(continuationDecos(s)).toEqual({
-      lines: [
-        { line: 2, style: "padding-inline-start: 3ch;" },
-        { line: 3, style: "padding-inline-start: 3ch;" },
-      ],
+      lines: [{ line: 2, style: "padding-inline-start: calc(var(--cm-quote-indent, 0px) + 3ch);" }],
       hidden: [[10, 12]],
     });
     // The collapsed indent is one atomic step.
@@ -923,8 +992,8 @@ describe("listDecorationsField", () => {
     const s = makeState("- a\n  - [ ] b\n    c\n1. d\n   e");
     expect(continuationDecos(s)).toEqual({
       lines: [
-        { line: 3, style: "padding-inline-start: 6ch;" },
-        { line: 5, style: "padding-inline-start: 3ch;" },
+        { line: 3, style: "padding-inline-start: calc(var(--cm-quote-indent, 0px) + 6ch);" },
+        { line: 5, style: "padding-inline-start: calc(var(--cm-quote-indent, 0px) + 3ch);" },
       ],
       hidden: [
         [14, 18],
@@ -933,17 +1002,25 @@ describe("listDecorationsField", () => {
     });
   });
 
-  test("leaves nested items and blank lines alone", () => {
-    const s = makeState("- a\n  - b\n\npara");
-    expect(continuationDecos(s).lines).toEqual([]);
+  test("leaves nested items, the separating blank line and the paragraph after alone", () => {
+    expect(continuationDecos(makeState("- a\n  - b\n\npara")).lines).toEqual([]);
+  });
+
+  test("leaves a line typed at the margin under an item at the margin", () => {
+    // `- a⏎lazy` is a lazy continuation per CommonMark, but the writer put
+    // the text at the margin: it is not padded under the bullet.
+    expect(continuationDecos(makeState("- a\nlazy")).lines).toEqual([]);
+    expect(continuationDecos(makeState("- a\n  - b\nlazy")).lines).toEqual([]);
+    // Empty lines under an item get nothing either.
+    expect(continuationDecos(makeState("- a\n")).lines).toEqual([]);
   });
 
   test("pads every line of a loose item's later paragraphs, not just wrapped ones", () => {
     const s = makeState("- a\n\n  b one\n  b two\n- c");
     expect(continuationDecos(s)).toEqual({
       lines: [
-        { line: 3, style: "padding-inline-start: 3ch;" },
-        { line: 4, style: "padding-inline-start: 3ch;" },
+        { line: 3, style: "padding-inline-start: calc(var(--cm-quote-indent, 0px) + 3ch);" },
+        { line: 4, style: "padding-inline-start: calc(var(--cm-quote-indent, 0px) + 3ch);" },
       ],
       hidden: [
         [5, 7],
@@ -955,40 +1032,36 @@ describe("listDecorationsField", () => {
   test("pads a later paragraph of an item that holds a nested list", () => {
     const s = makeState("- a\n  - b\n\n  para");
     expect(continuationDecos(s)).toEqual({
-      lines: [{ line: 4, style: "padding-inline-start: 3ch;" }],
+      lines: [{ line: 4, style: "padding-inline-start: calc(var(--cm-quote-indent, 0px) + 3ch);" }],
       hidden: [[11, 13]],
     });
   });
 
-  // Line numbers whose marker line carries the item-gap class.
-  function gapLines(state: EditorState): number[] {
-    const out: number[] = [];
-    state.field(__test.listDecorationsField).all.between(0, state.doc.length, (from, to, deco) => {
-      if (from === to && (deco.spec as { class?: string }).class === __test.LIST_ITEM_GAP_CLASS) {
-        out.push(state.doc.lineAt(from).number);
-      }
+  test("draws `- - text` as a bullet followed by a nested bullet", () => {
+    const s = makeState("- - w");
+    // Two one-step prefixes side by side: the outer at the line start, the
+    // inner right after it (not a second line-start prefix spanning both).
+    expect(prefixMarks(s).map(({ from, to, style }) => ({ from, to, style }))).toEqual([
+      {
+        from: 0,
+        to: 2,
+        style: "width: 3ch; --cm-list-marker-offset: 0ch; --cm-list-marker-width: 3ch",
+      },
+      {
+        from: 2,
+        to: 4,
+        style: "width: 3ch; --cm-list-marker-offset: 0ch; --cm-list-marker-width: 3ch",
+      },
+    ]);
+    // One hanging indent for the line, the inner item's.
+    const lineStyles: string[] = [];
+    s.field(__test.listDecorationsField).all.between(0, 0, (from, to, deco) => {
+      const style = (deco.spec as { attributes?: { style?: string } }).attributes?.style;
+      if (from === to && style?.includes("text-indent")) lineStyles.push(style);
     });
-    return out;
-  }
-
-  test("gaps items that follow another item, not the first of a list", () => {
-    expect(gapLines(makeState("para\n- a\n- b\n- [ ] c"))).toEqual([3, 4]);
-  });
-
-  test("gaps at every depth, including a nested list's first child", () => {
-    expect(gapLines(makeState("- a\n  - b\n  - c\n- d\n  1. e\n  2. f"))).toEqual([2, 3, 4, 5, 6]);
-  });
-
-  test("does not gap a nested item whose parent marker shares its line", () => {
-    expect(gapLines(makeState("- - b\n  - c"))).toEqual([2]);
-  });
-
-  test("gaps an item that opens a new list right after another list", () => {
-    expect(gapLines(makeState("1. a\n- b\n* c"))).toEqual([2, 3]);
-  });
-
-  test("does not gap continuation lines or items after a blank line's paragraph", () => {
-    expect(gapLines(makeState("- a\n  wrapped\n- b\n\npara\n\n- c"))).toEqual([3]);
+    expect(lineStyles).toEqual([
+      "padding-inline-start: calc(var(--cm-quote-indent, 0px) + 6ch); text-indent: -6ch;",
+    ]);
   });
 
   test("marks checked tasks and carries nested marker geometry", () => {

@@ -75,7 +75,6 @@ Standard editing shortcuts provided by CodeMirror's basic setup.
 | Alt+Shift+ArrowDown  | Copy line down                 |
 | Cmd+Shift+K          | Delete line                    |
 | Cmd+Enter            | Insert line below              |
-| Cmd+Shift+Enter      | Insert line above              |
 | Tab                  | Indent / accept completion     |
 | Shift+Tab            | Dedent                         |
 | Cmd+]                | Indent more                    |

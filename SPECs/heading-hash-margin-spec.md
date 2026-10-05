@@ -1,5 +1,7 @@
 # Hanging ATX Heading Hash Markers Spec
 
+> **Removed (2026-10-05).** On user feedback the hanging hash felt odd (the `##` floated outside the text column, and the selection was clamped so the caret could never enter it). Heading hashes are now ordinary markdown marks: shown inline, muted, while the caret is on the line, hidden otherwise. `heading-decorations.ts` keeps only the heading line styling; the no-go zones, `headingSelectionGuard`, `escapeHashLeft`, the margin click handler and `clampSelectionToHeadings` are gone.
+
 ## Goal
 
 Render `#`/`##`/…/`######` hash markers for ATX headings in the left margin
