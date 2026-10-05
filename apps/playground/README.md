@@ -15,6 +15,12 @@ vp install
 vp run playground#dev      # http://localhost:1430 (or `vp dev` inside apps/playground)
 ```
 
+Open `http://localhost:1430/?full` to mount the desktop app's complete
+extension set (`createEditorExtensions`: tables, math, Mermaid, HTML blocks,
+wiki links, search, clipboard) instead of the core subset. Tauri calls are
+stubbed to fail, so local images show as broken and link opening / the native
+clipboard menu do nothing; editing and rendering behave as in the app.
+
 The editor view is on `window.__view` for scripted checks
 (`agent-browser eval "window.__view.state.doc.toString()"`), and the
 `EditorView` class on `window.__EditorView`, so a script can read facets
