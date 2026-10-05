@@ -30,7 +30,7 @@
       "description": "Line height multiplier for the editor",
       "category": "Editor",
       "type": "number",
-      "default": 1.8,
+      "default": 1.875,
       "cssVar": "--writer-editor-line-height"
     },
     {

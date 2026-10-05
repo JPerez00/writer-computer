@@ -147,9 +147,10 @@ function writeFenceText(view: EditorView, host: HTMLElement, next: string): void
 function parseFencedCode(
   state: { doc: { sliceString(from: number, to: number): string } },
   node: SyntaxNodeRef,
-): { info: string; source: string } | undefined {
+): { info: string; source: string; closed: boolean } | undefined {
   let info = "";
   let source = "";
+  let marks = 0;
 
   let child = node.node.firstChild;
   while (child) {
@@ -157,12 +158,16 @@ function parseFencedCode(
       info = state.doc.sliceString(child.from, child.to);
     } else if (child.name === "CodeText") {
       source += state.doc.sliceString(child.from, child.to);
+    } else if (child.name === "CodeMark") {
+      marks++;
     }
     child = child.nextSibling;
   }
 
   if (!info) return undefined;
-  return { info, source };
+  // Opening and closing fence are both CodeMarks; an unclosed fence (still
+  // being typed) runs to the end of the document with only the opening one.
+  return { info, source, closed: marks >= 2 };
 }
 
 const mermaidFoldExtension = foldableSyntaxFacet.of({
@@ -173,6 +178,10 @@ const mermaidFoldExtension = foldableSyntaxFacet.of({
     if (!parsed) return undefined;
 
     if (!parsed.info.trim().toLowerCase().startsWith("mermaid")) return undefined;
+    // A fence without its closing ``` is still being typed. Replacing it would
+    // swallow the line under the caret and push the caret out of the block,
+    // so it stays plain source until the writer closes it.
+    if (!parsed.closed) return undefined;
 
     const body = parsed.source.trim();
     if (!body) return undefined;

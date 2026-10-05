@@ -20,9 +20,18 @@ export const additionalMarkdownSyntaxTags: MarkdownConfig = {
       FencedCode: markdownTags.fencedCode,
       URL: markdownTags.linkURL,
       ListMark: markdownTags.listMark,
+      // lezer-markdown tags escapes `tags.escape`, which the code palette
+      // colours like a regexp; in prose `\*` should read as a plain `*`.
+      Escape: markdownTags.escapedChar,
     }),
   ],
 };
+
+/** Heading font size per level (H1 first), relative to the body. The one
+ *  source: the highlight style sets the size from it, and the heading line
+ *  decoration passes it to the theme's spacing math as `--ws-heading-scale`.
+ *  H4–H6 step down too, so a sixth-level heading doesn't look like a fourth. */
+export const HEADING_SCALES = [1.6, 1.4, 1.2, 1.1, 1, 0.9] as const;
 
 const headingTagStyles = (fontSizes: (string | null)[]): TagStyle[] =>
   fontSizes.map((fontSize, i) => ({
@@ -33,7 +42,7 @@ const headingTagStyles = (fontSizes: (string | null)[]): TagStyle[] =>
 
 export const baseSyntaxHighlights = syntaxHighlighting(
   HighlightStyle.define([
-    ...headingTagStyles(["1.6em", "1.4em", "1.2em", null, null, null]),
+    ...headingTagStyles(HEADING_SCALES.map((scale) => `${scale.toString()}em`)),
     {
       tag: markdownTags.headerMark,
       color: "var(--pm-header-mark-color)",

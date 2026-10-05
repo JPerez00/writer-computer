@@ -1,4 +1,10 @@
-import { EditorSelection, type Extension, type StateCommand, Prec } from "@codemirror/state";
+import {
+  type ChangeSpec,
+  EditorSelection,
+  type Extension,
+  type StateCommand,
+  Prec,
+} from "@codemirror/state";
 import { type EditorView, type KeyBinding, keymap } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 
@@ -147,6 +153,11 @@ export const insertLink: StateCommand = ({ state, dispatch }) => {
 /**
  * For every line touched by each selection range, apply `transform`.
  * `transform` receives the full line text and returns the replacement text.
+ *
+ * Each line is rewritten as a minimal edit (the transforms only touch the
+ * line's prefix), and the selection is mapped through those edits, so the
+ * caret stays with the text it was in. Selecting the rewritten lines instead
+ * would make the next Enter or keystroke replace them.
  */
 function lineCommand(
   transform: (line: string, lineIndex: number, allLines: string[]) => string,
@@ -163,20 +174,47 @@ function lineCommand(
         lines.push(state.doc.line(i).text);
       }
 
-      const transformed = lines.map((l, idx) => transform(l, idx, lines));
+      const edits: ChangeSpec[] = [];
+      lines.forEach((before, idx) => {
+        const edit = minimalEdit(before, transform(before, idx, lines));
+        if (!edit) return;
+        const lineFrom = state.doc.line(fromLine.number + idx).from;
+        edits.push({ from: lineFrom + edit.from, to: lineFrom + edit.to, insert: edit.insert });
+      });
 
-      const insert = transformed.join("\n");
-      const newFrom = fromLine.from;
-      const newTo = fromLine.from + insert.length;
-
+      const changeSet = state.changes(edits);
       return {
-        changes: [{ from: fromLine.from, to: toLine.to, insert }],
-        range: EditorSelection.range(Math.min(newFrom, newFrom + insert.length), newTo),
+        changes: changeSet,
+        range: EditorSelection.range(
+          changeSet.mapPos(range.anchor, 1),
+          changeSet.mapPos(range.head, 1),
+        ),
       };
     });
 
-    dispatch(state.update(changes, { userEvent }));
+    dispatch(state.update(changes, { userEvent, scrollIntoView: true }));
     return true;
+  };
+}
+
+// The smallest single replacement turning `before` into `after`: strip their
+// common prefix and suffix. Returns null when they are equal.
+function minimalEdit(
+  before: string,
+  after: string,
+): { from: number; to: number; insert: string } | null {
+  if (before === after) return null;
+  let start = 0;
+  const max = Math.min(before.length, after.length);
+  while (start < max && before[start] === after[start]) start++;
+  let end = 0;
+  while (end < max - start && before[before.length - 1 - end] === after[after.length - 1 - end]) {
+    end++;
+  }
+  return {
+    from: start,
+    to: before.length - end,
+    insert: after.slice(start, after.length - end),
   };
 }
 
@@ -214,8 +252,11 @@ export const setParagraph: StateCommand = lineCommand((line) => {
 // ---------------------------------------------------------------------------
 
 export const toggleBulletList: StateCommand = lineCommand((line, _idx, allLines) => {
-  const allHave = allLines.every((l) => BULLET_RE.test(l));
-  if (allHave) return line.replace(BULLET_RE, "$1");
+  // A task is a bullet with a checkbox: the toggle turns it into a plain
+  // bullet rather than stripping `- ` and leaving a stray `[ ] text`.
+  const isPlainBullet = (l: string) => BULLET_RE.test(l) && !TASK_RE.test(l);
+  if (allLines.every(isPlainBullet)) return line.replace(BULLET_RE, "$1");
+  if (TASK_RE.test(line)) return line.replace(TASK_RE, "$1- ");
   if (BULLET_RE.test(line)) return line;
   return line.replace(LEADING_WS_RE, "$&- ");
 }, "input.format.bulletList");

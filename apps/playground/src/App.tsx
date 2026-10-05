@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { EditorView, drawSelection } from "@codemirror/view";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { history } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { GFM } from "@lezer/markdown";
@@ -12,7 +12,46 @@ import {
 import { headingDecorations } from "@/components/editor-area/heading-decorations";
 import { markdownFormatting } from "@/components/editor-area/markdown-formatting";
 import { viewportParsePlugin } from "@/components/editor-area/viewport-parse";
+import { createEditorExtensions } from "@/components/editor-area/editor-extensions";
 import "@/components/editor-area/prosemark-theme.css";
+
+// `?full` mounts the desktop app's complete extension set (tables, math,
+// Mermaid, HTML blocks, wiki links, search, clipboard) instead of the core
+// subset; its Tauri-backed actions (link opening, native clipboard menu,
+// image file URLs) fail when triggered, but editing and rendering work.
+const FULL = new URLSearchParams(location.search).has("full");
+
+// Image and wiki-embed widgets call Tauri's `convertFileSrc` while rendering;
+// without a stand-in the throw leaves CodeMirror's view tree broken. The
+// resulting asset:// URLs don't load, so local images show as broken.
+if (FULL) {
+  const w = window as unknown as { __TAURI_INTERNALS__?: object };
+  w.__TAURI_INTERNALS__ ??= {
+    convertFileSrc: (path: string, protocol = "asset") =>
+      `${protocol}://localhost/${encodeURIComponent(path)}`,
+    invoke: () => Promise.reject(new Error("playground: no Tauri backend")),
+  };
+}
+
+function editorExtensions(): Extension[] {
+  if (FULL) {
+    return createEditorExtensions(
+      () => "/playground/note.md",
+      () => false,
+      new Compartment(),
+    );
+  }
+  return [
+    markdown({ extensions: [GFM, prosemarkMarkdownSyntaxExtensions] }),
+    history(),
+    prosemarkBasicSetup(),
+    drawSelection(),
+    prosemarkBaseThemeSetup(),
+    viewportParsePlugin,
+    headingDecorations,
+    markdownFormatting,
+  ];
+}
 
 const SAMPLE = `# List playground
 
@@ -69,14 +108,7 @@ export function App() {
       state: EditorState.create({
         doc: SAMPLE,
         extensions: [
-          markdown({ extensions: [GFM, prosemarkMarkdownSyntaxExtensions] }),
-          history(),
-          prosemarkBasicSetup(),
-          drawSelection(),
-          prosemarkBaseThemeSetup(),
-          viewportParsePlugin,
-          headingDecorations,
-          markdownFormatting,
+          ...editorExtensions(),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) setDoc(update.state.doc.toString());
             if (update.docChanged || update.selectionSet) {

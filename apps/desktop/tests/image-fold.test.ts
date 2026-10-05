@@ -47,3 +47,27 @@ describe("imageExtension height stability", () => {
     expect(widget.estimatedHeight).toBe(240);
   });
 });
+
+describe("imageExtension while the destination is being typed", () => {
+  const imageWidgets = (state: EditorState): number => {
+    let count = 0;
+    state.field(foldExtension).between(0, state.doc.length, (_from, _to, decoration) => {
+      if ((decoration.spec as { widget?: unknown }).widget) count++;
+    });
+    return count;
+  };
+  const urlFrom = doc.indexOf("assets");
+  const imageEnd = doc.indexOf(")") + 1;
+
+  test("no preview while the caret is inside the URL", () => {
+    expect(imageWidgets(makeState(urlFrom + 3))).toBe(0);
+  });
+
+  test("the preview shows once the caret is past the closing paren", () => {
+    expect(imageWidgets(makeState(imageEnd))).toBe(1);
+  });
+
+  test("the preview shows while the caret is in the alt text", () => {
+    expect(imageWidgets(makeState(doc.indexOf("diagram") + 2))).toBe(1);
+  });
+});

@@ -1,5 +1,6 @@
 import { EditorView, ViewPlugin, drawSelection } from "@codemirror/view";
 import { type Compartment, type Extension, Prec } from "@codemirror/state";
+import { html } from "@codemirror/lang-html";
 import { markdown } from "@codemirror/lang-markdown";
 import { history } from "@codemirror/commands";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
@@ -85,6 +86,12 @@ function storeSyncExtension(getFilePath: () => string): Extension {
   });
 }
 
+// The HTML dialect lang-markdown parses inline and block HTML with. Its
+// default auto-closes a tag as soon as its `>` is typed; in prose that puts
+// `</details>` after the caret, and a writer who types their own closing tag
+// ends up with two.
+const htmlTagLanguage = html({ matchClosingTags: false, autoCloseTags: false });
+
 export function createEditorExtensions(
   getFilePath: () => string,
   isDisposed: () => boolean,
@@ -94,6 +101,7 @@ export function createEditorExtensions(
     markdown({
       codeLanguages: languages,
       extensions: [GFM, prosemarkMarkdownSyntaxExtensions, htmlBlockParserExtension],
+      htmlTagLanguage,
     }),
     linkNavigationExtension(getFilePath, isDisposed),
     editorBodyContextMenuExtension(getFilePath, isDisposed),

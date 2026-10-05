@@ -195,6 +195,18 @@ Code lines don't wrap (`white-space: pre`). A block is a run of sibling `.cm-lin
 
 Instead the offset is state: `codeBlockScrollField` in `prosemark-core/codeFenceScroll.ts` holds pixels per block start, `codeFenceExtension` renders it as `text-indent: -<offset>px` on each line decoration, and the lines clip with `overflow-x: clip` (`hidden` would make them scroll containers again). Wheel input and caret reveal both dispatch `setCodeBlockScroll`; the resulting decoration rebuild is what redraws the layers. Caret reveal measures in a `requestMeasure` read and dispatches from a `setTimeout` in the write, since measure writes still run inside the update cycle. The scrollbar is also drawn rather than native: a `layer` places one thumb per overflowing block and dispatches the same effect when the thumb is dragged. The drag follows mouse moves on the window, not on the thumb, because a redraw can replace thumb elements.
 
+## Plugin decorations set in a measure callback aren't read until the next update
+
+A `ViewPlugin` exposes `decorations` that CodeMirror reads during a view update. Assigning `this.decorations` inside a `requestMeasure` write changes nothing on screen until some later update reads it again. `blockQuoteExtension` used to build its whole decoration set there, so quote bars lagged one update behind and a note opened by replacing the document showed none until a key was pressed. Build whatever the tree alone determines (the `.cm-blockquote-line` bars) synchronously in `update`. Measure only what needs the DOM (nested-quote bar offsets), and when a measurement changes the decorations, dispatch an effect-only transaction from outside the measure cycle (a microtask or `setTimeout`) so the view re-reads them.
+
+## Commands that move the caret must ask to scroll
+
+A `view.dispatch` with a new selection does not scroll unless the transaction says `scrollIntoView: true`; CodeMirror's own motion and editing commands set it, hand-written ones have to. Writer's list Enter/Backspace/Tab, the formatting line commands, the line-boundary keys and the block-reveal arrows all set it. The reveal arrows matter most: moving into a table, display math, Mermaid or `<details>` block swaps the widget for its source, so the block's height changes after the move was computed. Without the scroll the caret landed up to ~500px outside the window and stayed there.
+
+## Transaction filters that override the selection: `sequential: true`
+
+A `transactionFilter` returning `[tr, { selection }]` adds a spec whose positions are read in the **start** document unless the spec has `sequential: true`. A clamped selection computed from `tr.newSelection` is in the new document, so without the flag CodeMirror maps it through the changes a second time and throws a `RangeError` as soon as the doc grew (the heading-hash selection guard, since removed, dropped every heading-shortcut transaction this way).
+
 ## File map
 
 - `mermaid-decorations.ts` — canonical replace-only block widget with in-widget editing. Reference for live position lookup (`findEnclosingFencedCode`) and writing the fence back from a nested editor.

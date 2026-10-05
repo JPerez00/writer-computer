@@ -11,6 +11,7 @@ import {
   CODE_LINE_LAST_CLASS,
   codeBlockScrollExtension,
   codeBlockScrollField,
+  isCodeBlockNode,
 } from "./codeFenceScroll";
 import { renderedRanges, renderedRangesChanged, treeChanged } from "./utils";
 
@@ -40,10 +41,9 @@ const buildCodeBlockDecorations = (
       from,
       to,
       enter: (node) => {
-        const isFencedCode = node.name === "FencedCode";
         const isFrontmatter = isFrontmatterNode(node);
 
-        if (isFencedCode || isFrontmatter) {
+        if (isCodeBlockNode(node)) {
           const key = JSON.stringify([node.from, node.to]);
           if (visited.has(key)) return;
           visited.add(key);
@@ -54,6 +54,13 @@ const buildCodeBlockDecorations = (
             lang = FRONTMATTER_LANGUAGE_LABEL;
             const contentNode = node.node.getChild("FrontmatterContent");
             code = contentNode ? state.doc.sliceString(contentNode.from, contentNode.to) : "";
+          } else if (node.name === "CodeBlock") {
+            // Indented code: every line carries the four-space indent.
+            code = state.doc
+              .sliceString(node.from, node.to)
+              .split("\n")
+              .map((line) => line.replace(/^(?: {1,4}|\t)/, ""))
+              .join("\n");
           } else {
             const codeInfoNode = node.node.getChild("CodeInfo");
             if (codeInfoNode) {

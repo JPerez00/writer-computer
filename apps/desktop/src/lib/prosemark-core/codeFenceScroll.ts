@@ -50,10 +50,13 @@ const MIN_THUMB_WIDTH = 24;
 /** Pixels per notch when a wheel reports line-based deltas (mice, not trackpads). */
 const LINE_DELTA_PX = 16;
 
-const isCodeBlockNode = (node: { name: string }): boolean =>
-  node.name === "FencedCode" || isFrontmatterNode(node);
+/** Blocks rendered as code (monospace box, no wrapping, horizontal scroll):
+ *  fenced and indented code, and frontmatter. The one definition, shared with
+ *  `codeFenceExtension`'s line styling. */
+export const isCodeBlockNode = (node: { name: string }): boolean =>
+  node.name === "FencedCode" || node.name === "CodeBlock" || isFrontmatterNode(node);
 
-/** The fenced code (or frontmatter) block containing `pos`, if any. Tries the
+/** The code (or frontmatter) block containing `pos`, if any. Tries the
  *  node ending at `pos` first so the caret after a closing fence still counts
  *  as inside the block. */
 export function codeBlockAt(state: EditorState, pos: number): SyntaxNode | null {

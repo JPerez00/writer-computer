@@ -5,6 +5,8 @@ export const markdownTags = {
   fencedCode: Tag.define(),
   linkURL: Tag.define(),
   escapeMark: Tag.define(),
+  // The escaped character itself (`*` in `\*`), deliberately unstyled.
+  escapedChar: Tag.define(),
   emoji: Tag.define(),
   emojiMark: Tag.define(),
   listMark: Tag.define(),

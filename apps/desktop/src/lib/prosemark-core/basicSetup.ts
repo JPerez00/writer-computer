@@ -16,6 +16,8 @@ import {
 } from "./syntaxHighlighting";
 import { fixedTabWidthExtension } from "./tabWidthExtension";
 import { listExtension } from "./list";
+import { blockQuoteKeymap } from "./blockQuote";
+import { lineBoundaryKeymap } from "./lineBoundary";
 import { revealBlockOnArrowExtension } from "./revealBlockOnArrow";
 export { prosemarkMarkdownSyntaxExtensions } from "./markdown";
 
@@ -32,6 +34,7 @@ export const prosemarkBasicSetup = (): Extension => [
   revealBlockOnArrowExtension,
   urlClassExtension,
   listExtension,
+  blockQuoteKeymap,
   fixedTabWidthExtension,
   codeBlockDecorationsExtension,
   offscreenSelectionHighlightExtension,
@@ -39,6 +42,9 @@ export const prosemarkBasicSetup = (): Extension => [
   // Basic CodeMirror Setup
   dropCursor(),
   closeBrackets(),
+  // Ahead of `defaultKeymap`, which binds the same keys to the unguarded
+  // CodeMirror commands.
+  lineBoundaryKeymap,
   keymap.of([
     ...closeBracketsKeymap,
     ...defaultKeymap,
